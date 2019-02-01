@@ -2,19 +2,21 @@ package alexi.rxpreferences
 
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
+import androidx.annotation.VisibleForTesting
 import io.reactivex.Emitter
 import io.reactivex.Observable
 import io.reactivex.ObservableEmitter
 
 abstract class Preference<T>(
-    protected val preferences: SharedPreferences,
+    val preferences: SharedPreferences,
     val key: String,
     val defValue: T
 ) {
 
-    private var onPreferenceChangedListened: OnSharedPreferenceChangeListener? = null
+    var onPreferenceChangedListened: OnSharedPreferenceChangeListener? = null
+        private set
 
-    abstract fun getValue(): T
+    abstract fun getValue(): T?
 
     fun toObservable(): Observable<T> = Observable.create<T> {
         it.prepareObservable()
@@ -22,12 +24,13 @@ abstract class Preference<T>(
         onDispose()
     }
 
+    @VisibleForTesting
     private fun ObservableEmitter<T>.prepareObservable() {
         try {
-            onNext(getValue())
             preferences.registerOnSharedPreferenceChangeListener(
                 createOnPreferenceChangedListener(this)
             )
+            emitValue()
         } catch (e: Exception) {
             onError(e)
             onDispose()
@@ -36,10 +39,14 @@ abstract class Preference<T>(
 
     private fun createOnPreferenceChangedListener(emitter: Emitter<T>) =
         OnSharedPreferenceChangeListener { _, _ ->
-            emitter.onNext(getValue())
+            emitter.emitValue()
         }.also {
             onPreferenceChangedListened = it
         }
+
+    private fun Emitter<T>.emitValue() {
+        getValue()?.let { onNext(it) }
+    }
 
     private fun onDispose() {
         preferences.unregisterOnSharedPreferenceChangeListener(onPreferenceChangedListened)
