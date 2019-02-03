@@ -8,10 +8,14 @@
               tools:context="alexi.sample.MainActivity">
 
     <EditText android:layout_width="match_parent"
+              android:hint="@string/input_text"
               android:id="@+id/inputField"
-              android:layout_height="wrap_content"/>
+              android:layout_height="wrap_content"
+              android:inputType="textNoSuggestions"
+              tools:ignore="Autofill,LabelFor"/>
 
     <TextView
+            android:hint="@string/last_submitted_string_hint"
             android:id="@+id/label"
             android:gravity="center"
             android:layout_width="match_parent"

@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">RxPreferences</string>
+    <string name="input_text">Input text</string>
+    <string name="last_submitted_string_hint">Here will be shown last submitted string</string>
 </resources>

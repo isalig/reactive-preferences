@@ -13,10 +13,12 @@ abstract class Preference<T>(
     val defValue: T
 ) {
 
-    var onPreferenceChangedListened: OnSharedPreferenceChangeListener? = null
+    private var lastValue: T? = null
+
+    var onPreferenceChangedListener: OnSharedPreferenceChangeListener? = null
         private set
 
-    abstract fun getValue(): T?
+    abstract fun getValue(): T
 
     fun toObservable(): Observable<T> = Observable.create<T> {
         it.prepareObservable()
@@ -38,18 +40,27 @@ abstract class Preference<T>(
     }
 
     private fun createOnPreferenceChangedListener(emitter: Emitter<T>) =
-        OnSharedPreferenceChangeListener { _, _ ->
-            emitter.emitValue()
+        OnSharedPreferenceChangeListener { _, key ->
+            if (this.key == key) {
+                emitter.emitValue()
+            }
         }.also {
-            onPreferenceChangedListened = it
+            onPreferenceChangedListener = it
         }
 
     private fun Emitter<T>.emitValue() {
-        getValue()?.let { onNext(it) }
+        val currentValue = getValue()
+
+        if (lastValue == currentValue) {
+            return
+        }
+
+        lastValue = currentValue
+        onNext(currentValue)
     }
 
     private fun onDispose() {
-        preferences.unregisterOnSharedPreferenceChangeListener(onPreferenceChangedListened)
-        onPreferenceChangedListened = null
+        preferences.unregisterOnSharedPreferenceChangeListener(onPreferenceChangedListener)
+        onPreferenceChangedListener = null
     }
 }

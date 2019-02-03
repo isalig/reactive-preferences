@@ -1,6 +1,7 @@
 package alexi.rxpreferences
 
 import android.content.SharedPreferences
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -9,39 +10,91 @@ import org.mockito.Mock
 import org.mockito.Mockito.*
 import org.mockito.junit.MockitoJUnitRunner
 
+private const val KEY = "key"
+
 @RunWith(MockitoJUnitRunner::class)
 class PreferenceTest {
 
+    private var currentValue = ""
+
+    private lateinit var spyPreference: TestPreference
+
     @Mock
-    private lateinit var preferencesMock: SharedPreferences
-    private lateinit var target: Preference<Any>
+    private lateinit var sharedPreferences: SharedPreferences
+    @Mock
+    private lateinit var editor: SharedPreferences.Editor
 
     @Before
     fun setUp() {
-        target = spy(object : Preference<Any>(preferencesMock, "", "") {
-            override fun getValue(): Any? = preferences.getString("", "")
-        })
+        spyPreference = spy(TestPreference(sharedPreferences, KEY))
 
-        `when`(target.preferences).thenReturn(preferencesMock)
-        `when`(preferencesMock.getString(anyString(), anyString())).thenReturn("")
+        `when`(spyPreference.preferences).thenReturn(sharedPreferences)
+        `when`(sharedPreferences.edit()).thenReturn(editor)
+        `when`(sharedPreferences.getString(eq(KEY), any())).then { currentValue }
+        `when`(editor.putString(anyString(), anyString())).then {
+            currentValue = it.arguments[1] as String
+            spyPreference.onPreferenceChangedListener?.onSharedPreferenceChanged(
+                sharedPreferences,
+                it.arguments[0] as String
+            )
+            editor
+        }
     }
 
     @Test
-    fun `test preference emits saved value on subscription`() {
-        target.toObservable().test()
-        verify(target, times(1)).getValue()
+    fun `test source registers shared preferences update listener`() {
+        spyPreference.toObservable().test()
+        verify(sharedPreferences).registerOnSharedPreferenceChangeListener(any())
     }
 
     @Test
-    fun `test dispose clears shared preferences subscription`() {
-        val subscription = target.toObservable().test()
+    fun `test source unregister preferences listener on dispose`() {
+        val subscription = spyPreference.toObservable().test()
         subscription.dispose()
-        assertNull(target.onPreferenceChangedListened)
+        assertNull(spyPreference.onPreferenceChangedListener)
     }
 
     @Test
-    fun `test preference source not emitting default value if empty`() {
-        `when`(preferencesMock.getString(anyString(), anyString())).thenReturn(null)
-        target.toObservable().test().assertNoValues().assertNoErrors()
+    fun `test source emits value on subscribe`() {
+        spyPreference.toObservable().test().valueCount() > 0
+    }
+
+    @Test
+    fun `test source updates on preference change`() {
+        spyPreference.toObservable().test().apply {
+            sharedPreferences.edit().putString(KEY, "first")
+            sharedPreferences.edit().putString(KEY, "second")
+        }.assertValues("", "first", "second")
+    }
+
+    @Test
+    fun `test source not updates when preference with different key changed`() {
+        val source = spyPreference.toObservable().test()
+        sharedPreferences.edit().putString("wrong key", "first")
+        source.assertNoErrors()
+        assertEquals(source.valueCount(), 1)
+    }
+
+    @Test
+    fun `test source not emit repeated values`() {
+        spyPreference.toObservable().test().apply {
+            sharedPreferences.edit().putString(KEY, "first")
+            sharedPreferences.edit().putString(KEY, "first")
+            sharedPreferences.edit().putString(KEY, "second")
+            sharedPreferences.edit().putString(KEY, "first")
+        }.assertValues("", "first", "second", "first")
+
+    }
+
+    class TestPreference(
+        sharedPreferences: SharedPreferences,
+        key: String,
+        defValue: String = ""
+    ) : Preference<String>(
+        sharedPreferences,
+        key,
+        defValue
+    ) {
+        override fun getValue(): String = preferences.getString(key, defValue)!!
     }
 }
