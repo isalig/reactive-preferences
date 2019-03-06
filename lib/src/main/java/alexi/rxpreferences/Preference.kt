@@ -20,11 +20,11 @@ abstract class Preference<T>(
 
     abstract fun getValue(): T
 
-    fun toObservable(): Observable<T> = Observable.create<T> {
-        it.prepareObservable()
-    }.doOnDispose {
-        onDispose()
-    }
+    fun toObservable(): Observable<T> = Observable
+        .create<T> { it.prepareObservable() }
+        .doOnDispose { onDispose() }
+        .replay(1)
+        .refCount()
 
     @VisibleForTesting
     private fun ObservableEmitter<T>.prepareObservable() {

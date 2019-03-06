@@ -83,7 +83,21 @@ class PreferenceTest {
             sharedPreferences.edit().putString(KEY, "second")
             sharedPreferences.edit().putString(KEY, "first")
         }.assertValues("", "first", "second", "first")
+    }
 
+    @Test
+    fun `test source shares value between different subscribers`() {
+        val values = arrayOf("first", "second", "third")
+
+        val testObservable = spyPreference.toObservable()
+        val firstSubscription = testObservable.test()
+        sharedPreferences.edit().putString(KEY, values[0])
+        sharedPreferences.edit().putString(KEY, values[1])
+        val secondSubscription = testObservable.test()
+        sharedPreferences.edit().putString(KEY, values[2])
+
+        firstSubscription.assertValues("", values[0], values[1], values[2])
+        secondSubscription.assertValues(values[1], values[2])
     }
 
     class TestPreference(
